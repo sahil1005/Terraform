@@ -34,6 +34,18 @@ resource "aws_instance" "myapp-server" {
     associate_public_ip_address = true
     key_name = "server-key-pair"
 
+    user_data = <<EOF
+                  #!/bin/bash
+                  sudo yum update -y && sudo yum install -y docker
+                  sudo systemctl start docker
+                  sudo usermode -aG docker ec2-user
+                  docker run -p 8080:80 nginx 
+                EOF
+/*
+alternative
+    user_data = file("entry-script.sh")  
+*/                         
+
     tags = {
       Name:  "${var.env_perfix}-server"
     }
