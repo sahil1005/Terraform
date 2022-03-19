@@ -18,8 +18,19 @@ resource "aws_vpc" "myapp-vpc" {
 }
 
 
+module "myapp-subnet" {
+  source = "./modules/subnet"
+  subnet_cidr_block = var.subnet_cidr_block
+  avail_zone = var.avail_zone
+  env_perfix = var.env_perfix
+  vpc_id = aws_vpc.myapp-vpc.id
+  route_table_id = aws_vpc.myapp-vpc.route_table_id
+
+}
+
+
 # To create subnet in vpc netwrok on AWS
-esource "aws_subnet" "myapp-subnet-1" {
+resource "aws_subnet" "myapp-subnet-1" {
     vpc_id = aws_vpc.myapp-vpc.id
     cidr_block = var.subnet_cidr_block
     availability_zone = var.avail_zone
@@ -89,4 +100,47 @@ resource "aws_security_group" "myapp-sg" {
   tags = {
      Name: "${var.env_perfix}-sg"
   }
+}
+
+data "aws_ami" "latest-amazon-linux-image" {    
+    most_recent = true
+    owners = ["amazon"] 
+    filter {
+      name = "name"
+      value = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    }  
+}
+
+resource "aws_key_pair" "shh-key" {
+    key_name = "server-key"
+    public_key = ""
+}
+
+resource "aws_instance" "myapp-server" {
+    ami = data.aws_ami.latest-amazon-linux-image.id
+    instance_type = var.instance_type
+
+    subnet_id = aws_subnet.myapp-subnet-1.id
+    vpc_security_group_ids = [aws_security_group.myapp-sg]
+    availability_zone = var.avail_zone
+
+    associate_public_ip_address = true
+    key_name = "server-key-pair"
+
+    user_data = <<EOF
+                  #!/bin/bash
+                  sudo yum update -y && sudo yum install -y docker
+                  sudo systemctl start docker
+                  sudo usermode -aG docker ec2-user
+                  docker run -p 8080:80 nginx 
+                EOF
+/*
+#alternative
+    user_data = file("entry-script.sh")  
+*/                         
+
+    tags = {
+      Name:  "${var.env_perfix}-server"
+    }
+  
 }
